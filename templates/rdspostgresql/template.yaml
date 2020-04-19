@@ -102,6 +102,7 @@ Metadata:
       - PubliclyAccessible
       - AccessCidr
       - CidrBlocks
+      - CidrRange
       - CidrSize
       - AvailabilityZones
       - NumberOfAvailabilityZones
@@ -122,6 +123,8 @@ Metadata:
         default: Master User Password
       CidrBlocks:
         default: CIDR Blocks
+      CidrRange:
+        default: CIDR Range
       CidrSize:
         default: CIDR Size
       AvailabilityZones:
@@ -205,6 +208,10 @@ Parameters:
       same quantity as specified in NumberOfAvailabilityZones
     Type: CommaDelimitedList
     Default: Auto
+  CidrRange:
+    Description: Cidr range to allocate blocks if CidrBlocks is set to Auto.
+    Type: String
+    Default: '0.0.0.0/0'
   CidrSize:
     Description: Size of Cidr block to allocate if CidrBlocks is set to Auto.
     Type: String
@@ -960,7 +967,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt AWSSBInjectedCopyZipsLambda.Arn
       DestBucket: !Ref AWSSBInjectedLambdaZipsBucket
-      SourceBucket: awsservicebrokeralpha
+      SourceBucket: awsservicebroker-cssc
       Prefix: functions/
       Objects:
       - get_cidrs/lambda_function.zip
@@ -989,7 +996,7 @@ Resources:
             Action:
             - s3:GetObject
             Resource:
-            - arn:aws:s3:::awsservicebrokeralpha/*
+            - arn:aws:s3:::awsservicebroker-cssc/*
           - Effect: Allow
             Action:
             - s3:PutObject
@@ -1108,6 +1115,7 @@ Resources:
       ServiceToken: !GetAtt AWSSBInjectedGetCidrsLambda.Arn
       Qty: !Ref NumberOfAvailabilityZones
       VpcId: !Ref VpcId
+      CidrRange: !Ref CidrRange
       CidrSize: !Ref CidrSize
   AWSSBInjectedGetAzsRole:
     Condition: AutoAzs
