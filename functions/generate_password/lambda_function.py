@@ -9,14 +9,14 @@ alnum = string.ascii_uppercase + string.ascii_lowercase + string.digits
 alphabet = string.ascii_lowercase
 upperalphabet = alphabet.upper()
 digits = string.digits
-special_characters = "-;.<>?{}_+~!%^()"
-full_alphabet = alphabet + special_characters
+special_characters = "-<>!^"
+full_alphabet = alphabet + upperalphabet + digits + special_characters
 
 
 def generate_password(pw_len):
     pwlist = []
     for i in range(1):
-        pwlist.append(secrets.choice(alnum))
+        pwlist.append(secrets.choice(alphabet))
         pwlist.append(secrets.choice(upperalphabet))
         pwlist.append(secrets.choice(digits))
         pwlist.append(secrets.choice(special_characters))
