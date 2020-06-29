@@ -2,7 +2,10 @@ package broker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"net/http"
 	"os"
 	"regexp"
@@ -13,7 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
 	"github.com/golang/glog"
@@ -177,7 +182,7 @@ func getOverrides(brokerid string, params []string, space string, service string
 }
 
 // Build aws credentials using global or override keys, or the credential chain
-func awsCredentialsGetter(keyid string, secretkey string, profile string, params map[string]string, client *ec2metadata.EC2Metadata) credentials.Credentials {
+func awsCredentialsGetter(keyid string, secretkey string, profile string, params map[string]string, client *ec2metadata.EC2Metadata, stsClient *sts.STS) credentials.Credentials {
 	if _, ok := params["aws_access_key"]; ok {
 		keyid = params["aws_access_key"]
 		glog.V(10).Infof("Using override credentials with keyid %q\n", keyid)
@@ -198,6 +203,7 @@ func awsCredentialsGetter(keyid string, secretkey string, profile string, params
 			&credentials.EnvProvider{},
 			&credentials.SharedCredentialsProvider{},
 			&ec2rolecreds.EC2RoleProvider{Client: client},
+			stscreds.NewWebIdentityRoleProvider(stsClient, os.Getenv("AWS_ROLE_ARN"), os.Getenv("AWS_ROLE_SESSION_NAME"), os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")),
 		})
 }
 
@@ -395,8 +401,15 @@ func paramValue(v interface{}) string {
 	return fmt.Sprintf("%v", v)
 }
 
+func bindViaLambda(service *osb.Service) bool {
+	if service.Metadata["bindViaLambda"] == true {
+		return true
+	}
+	return false
+}
+
 func leaveOutputsAsIs(service *osb.Service) bool {
-	if (service.Metadata["outputsAsIs"]  == true || service.Metadata["cloudFoundry"] == true ) {
+	if service.Metadata["outputsAsIs"] == true || service.Metadata["cloudFoundry"] == true {
 		return true
 	}
 	return false
@@ -452,7 +465,7 @@ func getCredentials(service *osb.Service, outputs []*cloudformation.Output, ssmS
 		}
 	}
 
-	if (service.Metadata["cloudFoundry"] == true){
+	if service.Metadata["cloudFoundry"] == true {
 		switch service.Name {
 		case "rdsmysql":
 			credentials = cfmysqlcreds(credentials)
@@ -611,4 +624,57 @@ func getCfnError(stackName string, cfnSvc CfnClient) *string {
 		}
 	}
 	return &message
+}
+
+func invokeLambdaBindFunc(sess *session.Session, newLambda GetLambdaClient, credentials map[string]interface{}, requestType string) (map[string]interface{}, error) {
+	bindLambdaVal, ok := credentials[cfnOutputBindLambda]
+	if !ok {
+		// Depending on the OutputsAsIs value derived from the
+		// templated, we might also need to check the
+		// screaming-snake case version of the key:
+		bindLambdaVal, ok = credentials[toScreamingSnakeCase(cfnOutputBindLambda)]
+		if !ok {
+			return nil, errors.New("the template metadata has BindViaLambda set to true, but no BindLambda is defined in template output")
+		}
+	}
+	bindLambda, ok := bindLambdaVal.(string)
+	if !ok {
+		return nil, fmt.Errorf("non string value for BindLambda in the cloudformation template")
+	}
+	if bindLambda == "" {
+		return nil, errors.New("the template metadata has BindViaLambda set to true, but the BindLambda output from cloudformation is an empty string")
+	}
+	lmbd := newLambda(sess)
+	if lmbd == nil {
+		return nil, errors.New("attempt to establish Lambda session return a nil client")
+	}
+	f := aws.String(bindLambda)
+	credentials["RequestType"] = requestType
+	payload, err := json.Marshal(credentials)
+	if err != nil {
+		return nil, fmt.Errorf("error marsheling outputs from cloud formation for use in lambda function")
+	}
+	ii := &lambda.InvokeInput{FunctionName: f, Payload: payload}
+	out, err := lmbd.Invoke(ii)
+	if err != nil {
+		return nil, err
+	}
+	output := make(map[string]interface{})
+	if len(out.Payload) > 0 {
+		err = json.Unmarshal(out.Payload, &output)
+		if err != nil {
+			return nil, fmt.Errorf(fmt.Sprintf("error unmarshalling response from lambda function: %s", err.Error()))
+		}
+	}
+	if msg, ok := output["errorMessage"]; ok {
+		// Lambda functions return a 200 response, even when
+		// there's an error in the script (because the request
+		// you sent was correct) Thus we have to check
+		// explcitly for the error output.
+		//
+		// We could include the stacktrace here also, but
+		// that's too much noise for end users.
+		return nil, fmt.Errorf("error in lambda function building binding: %v %v", output["errorType"], msg)
+	}
+	return output, nil
 }

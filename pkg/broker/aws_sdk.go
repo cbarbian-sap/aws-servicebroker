@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
@@ -27,7 +29,7 @@ func AwsSessionGetter(keyid string, secretkey string, region string, accountId s
 		region = params["region"]
 	}
 
-	creds := awsCredentialsGetter(keyid, secretkey, profile, params, ec2metadata.New(session.Must(session.NewSession())))
+	creds := awsCredentialsGetter(keyid, secretkey, profile, params, ec2metadata.New(session.Must(session.NewSession())), sts.New(session.Must(session.NewSession())))
 	cfg := aws.NewConfig().WithCredentials(&creds).WithRegion(region)
 	currentAccountSession := session.Must(session.NewSession(cfg))
 	sess, err := assumeTargetRole(currentAccountSession, params, region, accountId)
@@ -59,6 +61,10 @@ func AwsStsClientGetter(sess *session.Session) *sts.STS {
 
 func AwsIamClientGetter(sess *session.Session) iamiface.IAMAPI {
 	return iam.New(sess)
+}
+
+func AwsLambdaClientGetter(sess *session.Session) lambdaiface.LambdaAPI {
+	return lambda.New(sess)
 }
 
 func GetCallerId(svc stsiface.STSAPI) (*sts.GetCallerIdentityOutput, error) {

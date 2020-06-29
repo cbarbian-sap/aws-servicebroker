@@ -1,6 +1,8 @@
 package broker
 
 import (
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"os"
 	"strings"
 	"testing"
@@ -11,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/aws-sdk-go/service/ssm/ssmiface"
 	osb "github.com/pmorie/go-open-service-broker-client/v2"
@@ -283,29 +286,31 @@ func TestAwsCredentialsGetter(t *testing.T) {
 	keyid, secretkey, profile := "", "", ""
 	params := make(map[string]string)
 	client := ec2metadata.New(session.Must(session.NewSession()))
-	actual := awsCredentialsGetter(keyid, secretkey, profile, params, client)
+	stsClient := sts.New(session.Must(session.NewSession()))
+	actual := awsCredentialsGetter(keyid, secretkey, profile, params, client, stsClient)
 	expected := *credentials.NewChainCredentials(
 		[]credentials.Provider{
 			&credentials.EnvProvider{},
 			&credentials.SharedCredentialsProvider{},
 			&ec2rolecreds.EC2RoleProvider{Client: client},
+			stscreds.NewWebIdentityRoleProvider(stsClient, os.Getenv("AWS_ROLE_ARN"), os.Getenv("AWS_ROLE_SESSION_NAME"), os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")),
 		})
 	assertor.Equal(expected, actual, "should return credential chain creds")
 
 	keyid, secretkey, profile = "testid", "testkey", ""
 	expected = *credentials.NewStaticCredentials(keyid, secretkey, "")
-	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client)
+	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client, stsClient)
 	assertor.Equal(expected, actual, "should return static creds")
 
 	keyid, secretkey, profile = "", "", "test"
 	expected = *credentials.NewChainCredentials([]credentials.Provider{&credentials.SharedCredentialsProvider{Profile: profile}})
-	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client)
+	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client, stsClient)
 	assertor.Equal(expected, actual, "should return shared creds")
 
 	keyid, secretkey, profile = "", "", ""
 	params = map[string]string{"aws_access_key": "testKeyId", "aws_secret_key": "testSecretKey"}
 	expected = *credentials.NewStaticCredentials("testKeyId", "testSecretKey", "")
-	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client)
+	actual = awsCredentialsGetter(keyid, secretkey, profile, params, client, stsClient)
 	assertor.Equal(expected, actual, "should return static creds")
 }
 
@@ -404,4 +409,108 @@ func TestGetCredentials(t *testing.T) {
 	actual, err := getCredentials(&service, outputs, ssmSvc)
 	assertor.Equal(nil, err, "err should be nil")
 	assertor.Equal(expected, actual, "not getting expected output")
+}
+
+func TestBindViaLambda(t *testing.T) {
+	assertor := assert.New(t)
+
+	assertor.False(bindViaLambda(&osb.Service{}), "should be False")
+	assertor.True(bindViaLambda(
+		&osb.Service{
+			Metadata: map[string]interface{}{
+				"bindViaLambda": true,
+			},
+		}))
+	assertor.False(bindViaLambda(
+		&osb.Service{
+			Metadata: map[string]interface{}{
+				"bindViaLambda": false,
+			},
+		}))
+}
+
+func TestInvokeLambdaBindFunc(t *testing.T) {
+	tests := []struct {
+		name                string
+		inputCredentials    map[string]interface{}
+		newLambdaF          GetLambdaClient
+		expectedErr         string
+		expectedCredentials map[string]interface{}
+	}{
+		{
+			name:             "No BindLambda",
+			inputCredentials: map[string]interface{}{},
+			expectedErr:      "the template metadata has BindViaLambda set to true, but no BindLambda is defined in template output",
+		},
+		{
+			name: "Non-string BindLambda",
+			inputCredentials: map[string]interface{}{
+				"BindLambda": 1,
+			},
+			expectedErr: "non string value for BindLambda in the cloudformation template",
+		},
+		{
+			name: "Empty-string BindLambda",
+			inputCredentials: map[string]interface{}{
+				"BindLambda": "",
+			},
+			expectedErr: "the template metadata has BindViaLambda set to true, but the BindLambda output from cloudformation is an empty string",
+		},
+		{
+			name: "lambda session is nil",
+			inputCredentials: map[string]interface{}{
+				"BindLambda": "MyLambdaFunc",
+			},
+			newLambdaF: func(s *session.Session) lambdaiface.LambdaAPI {
+				return nil
+			},
+			expectedErr: "attempt to establish Lambda session return a nil client",
+		},
+		{
+			name: "error in lambda script",
+			inputCredentials: map[string]interface{}{
+				"BindLambda": "MyLambdaFunc",
+			},
+			newLambdaF: func(s *session.Session) lambdaiface.LambdaAPI {
+				return &mockLambda{
+					lambdas: map[string]mockLambdaFunc{
+						"MyLambdaFunc": func(payload []byte) ([]byte, error) {
+							return []byte(`{"errorType":"SomeError","errorMessage":"there was an error"}`), nil
+						},
+					},
+				}
+			},
+			expectedErr: "error in lambda function building binding: SomeError there was an error",
+		},
+		{
+			name: "succesful bind",
+			inputCredentials: map[string]interface{}{
+				"BindLambda": "MyLambdaFunc",
+			},
+			newLambdaF: func(s *session.Session) lambdaiface.LambdaAPI {
+				return &mockLambda{
+					lambdas: map[string]mockLambdaFunc{
+						"MyLambdaFunc": func(payload []byte) ([]byte, error) {
+
+							return []byte(`{"MyKey":"MyVal"}`), nil
+						},
+					},
+				}
+			},
+			expectedCredentials: map[string]interface{}{"MyKey": "MyVal"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			credentials, err := invokeLambdaBindFunc(nil, tc.newLambdaF, tc.inputCredentials, "bind")
+			if tc.expectedErr != "" {
+				assert.EqualError(t, err, tc.expectedErr)
+				assert.Nil(t, credentials)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, credentials, tc.expectedCredentials)
+		})
+	}
 }
