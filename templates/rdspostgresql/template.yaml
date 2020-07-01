@@ -569,51 +569,123 @@ Parameters:
     Type: AWS::EC2::VPC::Id
 Mappings:
   Version2Family:
-    9.3.12:
+    "9.3.12":
       Family: postgres9.3
       MajorVersion: '9.3'
-    9.3.14:
+    "9.3.14":
       Family: postgres9.3
       MajorVersion: '9.3'
-    9.3.16:
+    "9.3.16":
       Family: postgres9.3
       MajorVersion: '9.3'
-    9.3.17:
+    "9.3.17":
       Family: postgres9.3
       MajorVersion: '9.3'
-    9.4.7:
+    "9.4.7":
       Family: postgres9.4
       MajorVersion: '9.4'
-    9.4.9:
+    "9.4.9":
       Family: postgres9.4
       MajorVersion: '9.4'
-    9.4.11:
+    "9.4.11":
       Family: postgres9.4
       MajorVersion: '9.4'
-    9.4.12:
+    "9.4.12":
       Family: postgres9.4
       MajorVersion: '9.4'
-    9.5.2:
+    "9.5.2":
       Family: postgres9.5
       MajorVersion: '9.5'
-    9.5.4:
+    "9.5.4":
       Family: postgres9.5
       MajorVersion: '9.5'
-    9.5.6:
+    "9.5.6":
       Family: postgres9.5
       MajorVersion: '9.5'
-    9.5.7:
+    "9.5.7":
       Family: postgres9.5
       MajorVersion: '9.5'
-    9.6.1:
+    "9.6.1":
       Family: postgres9.6
       MajorVersion: '9.6'
-    9.6.2:
+    "9.6.2":
       Family: postgres9.6
       MajorVersion: '9.6'
-    9.6.3:
+    "9.6.3":
       Family: postgres9.6
       MajorVersion: '9.6'
+    "9.6.5":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.6":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.8":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.9":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.10":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.11":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.12":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.14":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.15":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "9.6.16":
+      Family: postgres9.6
+      MajorVersion: '9.6'
+    "10.1":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.3":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.4":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.5":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.6":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.7":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.9":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.10":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.11":
+      Family: postgres10
+      MajorVersion: '10'
+    "11.1":
+      Family: postgres11
+      MajorVersion: '11'
+    "11.2":
+      Family: postgres11
+      MajorVersion: '11'
+    "11.4":
+      Family: postgres11
+      MajorVersion: '11'
+    "11.5":
+      Family: postgres11
+      MajorVersion: '11'
+    "11.6":
+      Family: postgres11
+      MajorVersion: '11'
 Conditions:
   3az:
     !Or
