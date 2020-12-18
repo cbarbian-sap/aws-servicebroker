@@ -230,7 +230,7 @@ Parameters:
   DBInstanceClass:
     Description: The compute and memory capacity of the DB instance.
     Type: String
-    Default: db.m4.xlarge
+    Default: db.m5.xlarge
     AllowedValues:
     - db.m1.small
     - db.m1.medium
@@ -248,6 +248,14 @@ Parameters:
     - db.m4.2xlarge
     - db.m4.4xlarge
     - db.m4.10xlarge
+    - db.m5.large
+    - db.m5.xlarge
+    - db.m5.2xlarge
+    - db.m5.4xlarge
+    - db.m5.8xlarge
+    - db.m5.12xlarge
+    - db.m5.16xlarge
+    - db.m5.24xlarge
     - db.r3.large
     - db.r3.xlarge
     - db.r3.2xlarge
