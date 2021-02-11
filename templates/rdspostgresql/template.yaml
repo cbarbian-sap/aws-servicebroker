@@ -79,6 +79,8 @@ Metadata:
           configuration
         Cost: https://aws.amazon.com/rds/pricing/
         ParameterValues: {}
+    UpdatableParameters:
+    - EngineVersion
   AWS::CloudFormation::Interface:
     ParameterGroups:
     - Label:
@@ -314,6 +316,10 @@ Parameters:
     - 10.9
     - 10.10
     - 10.11
+    - 10.12
+    - 10.13
+    - 10.14
+    - 10.15
     - 11.1
     - 11.2
     - 11.4
@@ -684,6 +690,18 @@ Mappings:
       Family: postgres10
       MajorVersion: '10'
     "10.11":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.12":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.13":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.14":
+      Family: postgres10
+      MajorVersion: '10'
+    "10.15":
       Family: postgres10
       MajorVersion: '10'
     "11.1":
